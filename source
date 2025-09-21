@@ -1,0 +1,82 @@
+#include <opencv2/opencv.hpp>
+#include <vector>
+#include <algorithm>
+
+bool compareContours(const std::pair<cv::Mat, std::vector<cv::Point>>& a, const std::pair<cv::Mat, std::vector<cv::Point>>& b) {
+    double meanA = cv::mean(a.first)[0];
+    double meanB = cv::mean(b.first)[0];
+    return meanA > meanB;
+}
+
+
+bool areRectanglesParallel(const cv::RotatedRect& rect1, const cv::RotatedRect& rect2) {
+    float angleDiff = std::abs(rect1.angle - rect2.angle);
+    return (angleDiff < 5 || std::abs(angleDiff - 90) < 5);
+}
+
+int main() 
+    {
+    cv::Mat src = cv::imread("/home/ybw/Pictures/work.jpg");
+    if (src.empty()) {
+        std::cout << "Could not open or find the image" << std::endl;
+        return -1;
+    }
+
+ 
+    cv::Mat gray;
+    cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+
+    cv::Mat binary;
+    cv::threshold(gray, binary, 127, 255, cv::THRESH_BINARY);
+
+   
+    std::vector<std::vector<cv::Point>> contours;
+    std::vector<cv::Vec4i> hierarchy;
+    cv::findContours(binary, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+    std::vector<std::pair<cv::Mat, std::vector<cv::Point>>> contourImages;
+    for (const auto& contour : contours)
+    {
+        cv::Rect boundingRect = cv::boundingRect(contour);
+        cv::Mat roi = gray(boundingRect);
+        contourImages.emplace_back(roi, contour);
+    }
+
+ 
+    std::sort(contourImages.begin(), contourImages.end(), compareContours);
+
+    
+    std::vector<std::vector<cv::Point>> topTwoContours;
+    if (contourImages.size() >= 2) 
+    {
+        topTwoContours.push_back(contourImages[0].second);
+        topTwoContours.push_back(contourImages[1].second);
+
+
+        cv::RotatedRect rect1 = cv::minAreaRect(topTwoContours[0]);
+        cv::RotatedRect rect2 = cv::minAreaRect(topTwoContours[1]);
+
+
+        if (areRectanglesParallel(rect1, rect2))
+       {
+           
+            cv::Point2f vertices1[4];
+            rect1.points(vertices1);
+            for (int i = 0; i < 4; ++i)
+       {
+                cv::line(src, vertices1[i], vertices1[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
+       }
+
+            cv::Point2f vertices2[4];
+            rect2.points(vertices2);
+            for (int i = 0; i < 4; ++i) {
+                cv::line(src, vertices2[i], vertices2[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
+        }
+        }
+     }
+
+    cv::imshow("Result", src);
+    cv::waitKey(0);
+
+    return 0;
+   }
